@@ -1,0 +1,8 @@
+# Define code ownership for the project
+
+# Default owner for all files
+* @your-username
+
+# Specific owners for directories or files
+/docs/ @docs-team
+/tests/ @qa-team
