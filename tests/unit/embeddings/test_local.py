@@ -55,7 +55,7 @@ def test_embed_raises_on_timeout(mock_sentence_transformer: Mock) -> None:
         client.embed(texts)
 
 
-def test_embed_with_empty_input(_mock_sentence_transformer: Mock) -> None:
+def test_embed_with_empty_input(mock_sentence_transformer: Mock) -> None:  # noqa: ARG001
     """Test that empty input list returns empty embeddings list."""
     client = LocalEmbeddingsClient(model_name="fake-model")
     embeddings = client.embed([])
