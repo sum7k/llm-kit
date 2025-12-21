@@ -4,6 +4,7 @@ from unittest.mock import Mock, patch
 import numpy as np
 import pytest
 
+from llm_kit.embeddings.base import Embedding
 from llm_kit.embeddings.local import LocalEmbeddingsClient
 
 
@@ -23,10 +24,11 @@ def test_embed_returns_one_vector_per_input(mock_sentence_transformer: Mock) -> 
     )
     client = LocalEmbeddingsClient(model_name="fake-model")
 
-    texts = client.embed(["a", "b", "c"])
+    embeddings = client.embed(["a", "b", "c"])
 
-    assert len(texts) == 3
-    assert all(isinstance(v, list) for v in texts)
+    assert len(embeddings) == 3
+    assert all(isinstance(e, Embedding) for e in embeddings)
+    assert all(isinstance(e.vector, list) for e in embeddings)
 
 
 def test_embed_respects_batch_size(mock_sentence_transformer: Mock) -> None:
@@ -40,9 +42,9 @@ def test_embed_respects_batch_size(mock_sentence_transformer: Mock) -> None:
     ]
     client = LocalEmbeddingsClient(model_name="fake-model", batch_size=2)
 
-    texts = client.embed(["a", "b", "c", "d", "e"])
+    embeddings = client.embed(["a", "b", "c", "d", "e"])
 
-    assert len(texts) == 5
+    assert len(embeddings) == 5
     calls = mock_sentence_transformer.encode.call_args_list
     assert [len(call.args[0]) for call in calls] == [2, 2, 1]
 

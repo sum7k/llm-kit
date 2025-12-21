@@ -7,7 +7,7 @@ from collections.abc import Iterable
 
 from sentence_transformers import SentenceTransformer
 
-from .base import EmbeddingsClient
+from .base import Embedding, EmbeddingsClient
 
 logger = logging.getLogger(__name__)
 
@@ -39,13 +39,13 @@ class LocalEmbeddingsClient(EmbeddingsClient):
             normalize,
         )
 
-    def embed(self, texts: list[str]) -> list[list[float]]:
+    def embed(self, texts: list[str]) -> list[Embedding]:
         if not texts:
             logger.debug("Empty input, returning empty list")
             return []
 
         logger.info("Embedding %d texts in batches of %d", len(texts), self._batch_size)
-        embeddings: list[list[float]] = []
+        embeddings: list[Embedding] = []
 
         for batch in _batch_iter(texts, self._batch_size):
             logger.debug("Processing batch with %d texts", len(batch))
@@ -56,7 +56,7 @@ class LocalEmbeddingsClient(EmbeddingsClient):
                 show_progress_bar=False,
             )
 
-            embeddings.extend(vectors.tolist())
+            embeddings.extend(Embedding(vector=v.tolist()) for v in vectors)
 
         logger.info("Successfully embedded %d texts", len(embeddings))
         return embeddings

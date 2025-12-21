@@ -3,6 +3,7 @@ from unittest.mock import Mock
 import pytest
 from openai import APITimeoutError
 
+from llm_kit.embeddings.base import Embedding
 from llm_kit.embeddings.openai import OpenAIEmbeddingsClient
 
 
@@ -18,10 +19,11 @@ def test_embed_returns_one_vector_per_input() -> None:
     mock_client.embeddings.create.return_value = _mock_response(3)
     client._client = mock_client
 
-    vectors = client.embed(["a", "b", "c"])
+    embeddings = client.embed(["a", "b", "c"])
 
-    assert len(vectors) == 3
-    assert all(isinstance(v, list) for v in vectors)
+    assert len(embeddings) == 3
+    assert all(isinstance(e, Embedding) for e in embeddings)
+    assert all(isinstance(e.vector, list) for e in embeddings)
 
 
 def test_embed_respects_batch_size() -> None:
@@ -36,9 +38,9 @@ def test_embed_respects_batch_size() -> None:
     ]
     client._client = mock_client
 
-    vectors = client.embed(["a", "b", "c", "d", "e"])
+    embeddings = client.embed(["a", "b", "c", "d", "e"])
 
-    assert len(vectors) == 5
+    assert len(embeddings) == 5
     calls = mock_client.embeddings.create.call_args_list
     assert [len(call.kwargs["input"]) for call in calls] == [2, 2, 1]
 
@@ -61,7 +63,7 @@ def test_embed_with_empty_input() -> None:
     mock_client = Mock()
     client._client = mock_client
 
-    vectors = client.embed([])
+    embeddings = client.embed([])
 
-    assert vectors == []
+    assert embeddings == []
     mock_client.embeddings.create.assert_not_called()

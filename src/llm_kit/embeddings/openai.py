@@ -10,7 +10,7 @@ from tenacity import (
     wait_exponential,
 )
 
-from .base import EmbeddingsClient
+from .base import Embedding, EmbeddingsClient
 
 logger = logging.getLogger(__name__)
 
@@ -33,13 +33,13 @@ class OpenAIEmbeddingsClient(EmbeddingsClient):
             batch_size,
         )
 
-    def embed(self, texts: list[str]) -> list[list[float]]:
+    def embed(self, texts: list[str]) -> list[Embedding]:
         if not texts:
             logger.debug("Empty input, returning empty list")
             return []
 
         logger.info("Embedding %d texts in batches of %d", len(texts), self._batch_size)
-        embeddings: list[list[float]] = []
+        embeddings: list[Embedding] = []
 
         for batch_num, start in enumerate(range(0, len(texts), self._batch_size), 1):
             end = start + self._batch_size
@@ -50,7 +50,7 @@ class OpenAIEmbeddingsClient(EmbeddingsClient):
 
             response = self._embed_batch(batch_texts)
             for data in response.data:
-                embeddings.append(data.embedding)
+                embeddings.append(Embedding(vector=data.embedding))
 
         logger.info("Successfully embedded %d texts", len(embeddings))
         return embeddings
