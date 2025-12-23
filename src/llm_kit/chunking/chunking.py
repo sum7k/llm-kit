@@ -1,4 +1,7 @@
 from dataclasses import dataclass
+from time import monotonic
+
+from llm_kit.observability.base import MetricsHook, NoOpMetricsHook
 
 
 @dataclass(frozen=True)
@@ -11,8 +14,14 @@ class Chunk:
 
 
 def chunk_text(
-    text: str, *, chunk_size: int, overlap: int, metadata: dict
+    text: str,
+    *,
+    chunk_size: int,
+    overlap: int,
+    metadata: dict,
+    metrics_hook: MetricsHook = NoOpMetricsHook(),
 ) -> list[Chunk]:
+    start = monotonic()
     if chunk_size <= 0:
         raise ValueError("chunk_size must be > 0")
     if overlap < 0:
@@ -43,4 +52,6 @@ def chunk_text(
         if end == text_len:
             break
 
+    elapsed_ms = 1000 * (monotonic() - start)
+    metrics_hook.record_latency(name="chunking_duration", value_ms=elapsed_ms)
     return chunks

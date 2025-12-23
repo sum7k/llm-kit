@@ -1,4 +1,5 @@
 import logging
+from time import monotonic
 from typing import Any
 
 from openai import OpenAI, OpenAIError
@@ -9,6 +10,8 @@ from tenacity import (
     stop_after_attempt,
     wait_exponential,
 )
+
+from llm_kit.observability.base import MetricsHook, NoOpMetricsHook
 
 from .base import Embedding, EmbeddingsClient
 
@@ -22,10 +25,12 @@ class OpenAIEmbeddingsClient(EmbeddingsClient):
         model: str = "text-embedding-ada-002",
         timeout: float = 10,
         batch_size: int = 100,
+        metrics_hook: MetricsHook = NoOpMetricsHook(),
     ):
         self._client = OpenAI(api_key=api_key, timeout=timeout)
         self._model = model
         self._batch_size = batch_size
+        self.metrics_hook = metrics_hook
         logger.info(
             "Initialized OpenAIEmbeddingsClient with model=%s, timeout=%s, batch_size=%s",
             model,
@@ -38,12 +43,15 @@ class OpenAIEmbeddingsClient(EmbeddingsClient):
             logger.debug("Empty input, returning empty list")
             return []
 
+        start = monotonic()
         logger.info("Embedding %d texts in batches of %d", len(texts), self._batch_size)
         embeddings: list[Embedding] = []
 
-        for batch_num, start in enumerate(range(0, len(texts), self._batch_size), 1):
-            end = start + self._batch_size
-            batch_texts = texts[start:end]
+        for batch_num, batch_start in enumerate(
+            range(0, len(texts), self._batch_size), 1
+        ):
+            end = batch_start + self._batch_size
+            batch_texts = texts[batch_start:end]
             logger.debug(
                 "Processing batch %d with %d texts", batch_num, len(batch_texts)
             )
@@ -52,6 +60,10 @@ class OpenAIEmbeddingsClient(EmbeddingsClient):
             for data in response.data:
                 embeddings.append(Embedding(vector=data.embedding))
 
+        elapsed_ms = 1000 * (monotonic() - start)
+        self.metrics_hook.record_latency(
+            name="openai_embeddings_duration", value_ms=elapsed_ms
+        )
         logger.info("Successfully embedded %d texts", len(embeddings))
         return embeddings
 

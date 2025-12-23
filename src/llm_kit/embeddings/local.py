@@ -4,8 +4,11 @@ from __future__ import annotations
 
 import logging
 from collections.abc import Iterable
+from time import monotonic
 
 from sentence_transformers import SentenceTransformer
+
+from llm_kit.observability.base import MetricsHook, NoOpMetricsHook
 
 from .base import Embedding, EmbeddingsClient
 
@@ -28,10 +31,12 @@ class LocalEmbeddingsClient(EmbeddingsClient):
         model_name: str,
         batch_size: int = 32,
         normalize: bool = False,
+        metrics_hook: MetricsHook = NoOpMetricsHook(),
     ) -> None:
         self._model = SentenceTransformer(model_name)
         self._batch_size = batch_size
         self._normalize = normalize
+        self.metrics_hook = metrics_hook
         logger.info(
             "Initialized LocalEmbeddingsClient with model=%s, batch_size=%s, normalize=%s",
             model_name,
@@ -44,6 +49,7 @@ class LocalEmbeddingsClient(EmbeddingsClient):
             logger.debug("Empty input, returning empty list")
             return []
 
+        start = monotonic()
         logger.info("Embedding %d texts in batches of %d", len(texts), self._batch_size)
         embeddings: list[Embedding] = []
 
@@ -58,6 +64,10 @@ class LocalEmbeddingsClient(EmbeddingsClient):
 
             embeddings.extend(Embedding(vector=v.tolist()) for v in vectors)
 
+        elapsed_ms = 1000 * (monotonic() - start)
+        self.metrics_hook.record_latency(
+            name="local_embeddings_duration", value_ms=elapsed_ms
+        )
         logger.info("Successfully embedded %d texts", len(embeddings))
         return embeddings
 

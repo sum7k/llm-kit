@@ -1,5 +1,6 @@
 import os
 from collections.abc import Iterable
+from time import monotonic
 
 import numpy as np
 import psycopg
@@ -7,6 +8,8 @@ from pgvector.psycopg import register_vector
 from psycopg import sql
 from psycopg.types.json import Json
 from psycopg_pool import ConnectionPool
+
+from llm_kit.observability.base import MetricsHook, NoOpMetricsHook
 
 from .types import QueryResult, VectorItem
 
@@ -20,8 +23,13 @@ def _configure_connection(conn: psycopg.Connection) -> None:  # type: ignore[typ
 
 class PgVectorStore:
     def __init__(
-        self, dsn: str, min_size: int | None = None, max_size: int | None = None
+        self,
+        dsn: str,
+        min_size: int | None = None,
+        max_size: int | None = None,
+        metrics_hook: MetricsHook = NoOpMetricsHook(),
     ) -> None:
+        self.metrics_hook = metrics_hook
         min_size = self._get_param_value(min_size, "LLM_KIT_PG_POOL_MIN_SIZE", 1)
         max_size = self._get_param_value(max_size, "LLM_KIT_PG_POOL_MAX_SIZE", 10)
         self._pool = ConnectionPool(
@@ -38,6 +46,7 @@ class PgVectorStore:
     def upsert(
         self, *, namespace: str = DEFAULT_NAMESPACE, items: Iterable[VectorItem]
     ) -> None:
+        start = monotonic()
         rows = [
             (
                 namespace,
@@ -65,6 +74,11 @@ class PgVectorStore:
         with self._pool.connection() as conn, conn.cursor() as cur:
             cur.executemany(query, rows)
 
+        elapsed_ms = 1000 * (monotonic() - start)
+        self.metrics_hook.record_latency(
+            name="pgvector_upsert_duration", value_ms=elapsed_ms
+        )
+
     def query(
         self,
         *,
@@ -73,6 +87,7 @@ class PgVectorStore:
         top_k: int,
         filters: dict | None = None,
     ) -> list[QueryResult]:
+        start = monotonic()
         if top_k < 1:
             raise ValueError("top_k must be at least 1")
 
@@ -106,6 +121,11 @@ class PgVectorStore:
             cur.execute(query, params)
             rows = cur.fetchall()
 
+        elapsed_ms = 1000 * (monotonic() - start)
+        self.metrics_hook.record_latency(
+            name="pgvector_query_duration", value_ms=elapsed_ms
+        )
+
         return [
             QueryResult(
                 id=row[0],
@@ -122,6 +142,7 @@ class PgVectorStore:
         ids: Iterable[str] | None = None,
         filters: dict | None = None,
     ) -> int:
+        start = monotonic()
         if not ids and not filters:
             raise ValueError("delete requires ids or filters")
 
@@ -149,6 +170,11 @@ class PgVectorStore:
         with self._pool.connection() as conn, conn.cursor() as cur:
             cur.execute(delete_query, params)
             deleted: int = cur.rowcount
+
+        elapsed_ms = 1000 * (monotonic() - start)
+        self.metrics_hook.record_latency(
+            name="pgvector_delete_duration", value_ms=elapsed_ms
+        )
 
         return deleted
 

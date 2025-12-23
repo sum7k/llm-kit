@@ -1,4 +1,5 @@
 from collections.abc import Iterable
+from time import monotonic
 from typing import TypeAlias
 
 from qdrant_client import QdrantClient
@@ -16,6 +17,8 @@ from qdrant_client.models import (
     PointStruct,
     VectorParams,
 )
+
+from llm_kit.observability.base import MetricsHook, NoOpMetricsHook
 
 from .types import QueryResult, VectorItem
 
@@ -45,6 +48,7 @@ class QdrantVectorStore:
         vector_size: int,
         distance: Distance = Distance.COSINE,
         on_disk: bool = False,
+        metrics_hook: MetricsHook = NoOpMetricsHook(),
     ) -> None:
         """
         Initialize Qdrant vector store.
@@ -56,7 +60,9 @@ class QdrantVectorStore:
             vector_size: Dimensionality of vectors.
             distance: Distance metric (COSINE, EUCLID, DOT).
             on_disk: Whether to store vectors on disk (for large datasets).
+            metrics_hook: Hook for recording metrics.
         """
+        self.metrics_hook = metrics_hook
         if url:
             self._client = QdrantClient(url=url, api_key=api_key)
         else:
@@ -94,6 +100,7 @@ class QdrantVectorStore:
             namespace: Logical namespace for multi-tenancy.
             items: Iterable of VectorItem to upsert.
         """
+        start = monotonic()
         points = [
             PointStruct(
                 id=item.id,
@@ -110,6 +117,11 @@ class QdrantVectorStore:
             collection_name=self._collection_name,
             wait=True,
             points=points,
+        )
+
+        elapsed_ms = 1000 * (monotonic() - start)
+        self.metrics_hook.record_latency(
+            name="qdrant_upsert_duration", value_ms=elapsed_ms
         )
 
     def query(
@@ -132,6 +144,7 @@ class QdrantVectorStore:
         Returns:
             List of QueryResult sorted by similarity (highest first).
         """
+        start = monotonic()
         if top_k < 1:
             raise ValueError("top_k must be at least 1")
 
@@ -153,6 +166,11 @@ class QdrantVectorStore:
             query_filter=query_filter,
             limit=top_k,
             with_payload=True,
+        )
+
+        elapsed_ms = 1000 * (monotonic() - start)
+        self.metrics_hook.record_latency(
+            name="qdrant_query_duration", value_ms=elapsed_ms
         )
 
         return [
@@ -184,6 +202,7 @@ class QdrantVectorStore:
         Returns:
             Number of points deleted.
         """
+        start = monotonic()
         if not ids and not filters:
             raise ValueError("delete requires ids or filters")
 
@@ -211,6 +230,11 @@ class QdrantVectorStore:
             collection_name=self._collection_name,
             points_selector=FilterSelector(filter=Filter(must=must_conditions)),
             wait=True,
+        )
+
+        elapsed_ms = 1000 * (monotonic() - start)
+        self.metrics_hook.record_latency(
+            name="qdrant_delete_duration", value_ms=elapsed_ms
         )
 
         return count_before

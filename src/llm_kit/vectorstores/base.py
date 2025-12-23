@@ -1,10 +1,14 @@
 from collections.abc import Iterable
 from typing import Protocol
 
+from llm_kit.observability.base import MetricsHook
+
 from .types import QueryResult, VectorItem
 
 
 class VectorStore(Protocol):
+    metrics_hook: MetricsHook
+
     def upsert(
         self,
         *,
