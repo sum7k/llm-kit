@@ -1,20 +1,7 @@
-from collections.abc import Iterable, Mapping
-from dataclasses import dataclass
-from typing import Any, Protocol
+from collections.abc import Iterable
+from typing import Protocol
 
-
-@dataclass(frozen=True)
-class VectorItem:
-    id: str
-    vector: list[float]
-    metadata: Mapping[str, Any]
-
-
-@dataclass(frozen=True)
-class QueryResult:
-    id: str
-    score: float
-    metadata: Mapping[str, Any]
+from .types import QueryResult, VectorItem
 
 
 class VectorStore(Protocol):
@@ -33,3 +20,16 @@ class VectorStore(Protocol):
         top_k: int,
         filters: dict | None = None,
     ) -> list[QueryResult]: ...
+
+    def delete(
+        self,
+        *,
+        namespace: str,
+        ids: Iterable[str] | None = None,
+        filters: dict | None = None,
+    ) -> int:
+        """
+        Delete vectors by id or by metadata filter.
+        Returns number of rows deleted.
+        """
+        ...
