@@ -20,6 +20,7 @@ from qdrant_client.models import (
 
 from llm_kit.observability.base import MetricsHook, NoOpMetricsHook
 
+from .base import VectorStore
 from .types import QueryResult, VectorItem
 
 # Type alias for Qdrant filter conditions
@@ -36,7 +37,7 @@ Condition: TypeAlias = (
 DEFAULT_NAMESPACE = "__global__"
 
 
-class QdrantVectorStore:
+class QdrantVectorStore(VectorStore):
     """Vector store implementation using Qdrant."""
 
     def __init__(

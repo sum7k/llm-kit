@@ -11,6 +11,7 @@ from psycopg_pool import ConnectionPool
 
 from llm_kit.observability.base import MetricsHook, NoOpMetricsHook
 
+from .base import VectorStore
 from .types import QueryResult, VectorItem
 
 DEFAULT_NAMESPACE = "__global__"
@@ -21,21 +22,25 @@ def _configure_connection(conn: psycopg.Connection) -> None:  # type: ignore[typ
     register_vector(conn)
 
 
-class PgVectorStore:
+class PgVectorStore(VectorStore):
     def __init__(
         self,
         dsn: str,
-        min_size: int | None = None,
-        max_size: int | None = None,
+        pool_min_size: int | None = None,
+        pool_max_size: int | None = None,
         metrics_hook: MetricsHook = NoOpMetricsHook(),
     ) -> None:
         self.metrics_hook = metrics_hook
-        min_size = self._get_param_value(min_size, "LLM_KIT_PG_POOL_MIN_SIZE", 1)
-        max_size = self._get_param_value(max_size, "LLM_KIT_PG_POOL_MAX_SIZE", 10)
+        pool_min_size = self._get_param_value(
+            pool_min_size, "LLM_KIT_PG_POOL_MIN_SIZE", 1
+        )
+        pool_max_size = self._get_param_value(
+            pool_max_size, "LLM_KIT_PG_POOL_MAX_SIZE", 10
+        )
         self._pool = ConnectionPool(
             dsn,
-            min_size=min_size,
-            max_size=max_size,
+            min_size=pool_min_size,
+            max_size=pool_max_size,
             configure=_configure_connection,
         )
 
