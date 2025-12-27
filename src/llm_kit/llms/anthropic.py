@@ -4,10 +4,10 @@ import logging
 from time import monotonic
 from typing import Any, Literal
 
-from anthropic import NOT_GIVEN, Anthropic, APIError
+from anthropic import NOT_GIVEN, APIError, AsyncAnthropic
 from tenacity import (
+    AsyncRetrying,
     before_sleep_log,
-    retry,
     retry_if_exception_type,
     stop_after_attempt,
     wait_exponential,
@@ -37,7 +37,7 @@ class AnthropicLLMClient(LLMClient):
         max_retries: int = 3,
         metrics_hook: MetricsHook = NoOpMetricsHook(),
     ):
-        self._client = Anthropic(api_key=api_key, timeout=timeout)
+        self._client = AsyncAnthropic(api_key=api_key, timeout=timeout)
         self._model = model
         self._max_retries = max_retries
         self.metrics_hook = metrics_hook
@@ -47,7 +47,7 @@ class AnthropicLLMClient(LLMClient):
             timeout,
         )
 
-    def complete(
+    async def complete(
         self,
         *,
         messages: list[Message],
@@ -71,7 +71,7 @@ class AnthropicLLMClient(LLMClient):
             len(tools) if tools else 0,
         )
 
-        raw = self._call_api(
+        raw = await self._call_api(
             system=system_content,
             messages=anthropic_messages,
             tools=anthropic_tools,
@@ -107,14 +107,7 @@ class AnthropicLLMClient(LLMClient):
 
         return response
 
-    @retry(
-        stop=stop_after_attempt(3),
-        wait=wait_exponential(multiplier=0.5, min=0.5, max=10),
-        retry=retry_if_exception_type(APIError),  # Transport only
-        before_sleep=before_sleep_log(logger, logging.WARNING),
-        reraise=True,
-    )
-    def _call_api(
+    async def _call_api(
         self,
         *,
         system: str | None,
@@ -124,14 +117,22 @@ class AnthropicLLMClient(LLMClient):
         max_tokens: int,
     ) -> Any:
         """Call Anthropic API with transport-only retries."""
-        return self._client.messages.create(
-            model=self._model,
-            messages=messages,  # type: ignore[arg-type]
-            temperature=temperature,
-            max_tokens=max_tokens,
-            system=system if system else NOT_GIVEN,
-            tools=tools if tools else NOT_GIVEN,  # type: ignore[arg-type]
-        )
+        async for attempt in AsyncRetrying(
+            stop=stop_after_attempt(3),
+            wait=wait_exponential(multiplier=0.5, min=0.5, max=10),
+            retry=retry_if_exception_type(APIError),
+            before_sleep=before_sleep_log(logger, logging.WARNING),
+            reraise=True,
+        ):
+            with attempt:
+                return await self._client.messages.create(
+                    model=self._model,
+                    messages=messages,  # type: ignore[arg-type]
+                    temperature=temperature,
+                    max_tokens=max_tokens,
+                    system=system if system else NOT_GIVEN,
+                    tools=tools if tools else NOT_GIVEN,  # type: ignore[arg-type]
+                )
 
     def _extract_system(
         self, messages: list[Message]

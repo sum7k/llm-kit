@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from collections.abc import Iterable
 from time import monotonic
@@ -45,7 +46,7 @@ class LocalEmbeddingsClient(EmbeddingsClient):
             normalize,
         )
 
-    def embed(self, texts: list[str]) -> list[Embedding]:
+    async def embed(self, texts: list[str]) -> list[Embedding]:
         if not texts:
             logger.debug("Empty input, returning empty list")
             return []
@@ -56,7 +57,9 @@ class LocalEmbeddingsClient(EmbeddingsClient):
 
         for batch in _batch_iter(texts, self._batch_size):
             logger.debug("Processing batch with %d texts", len(batch))
-            vectors = self._model.encode(
+            # Use to_thread to avoid blocking event loop with CPU-bound work
+            vectors = await asyncio.to_thread(
+                self._model.encode,
                 batch,
                 convert_to_numpy=True,
                 normalize_embeddings=self._normalize,

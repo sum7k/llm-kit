@@ -1,3 +1,4 @@
+import inspect
 import logging
 from time import monotonic
 from typing import Any
@@ -20,12 +21,18 @@ class ToolEngine:
         self.tool_registry = tool_registry
         self.metrics_hook = metrics_hook
 
-    def call_tool(self, tool_call: ToolCall) -> Any:
+    async def call_tool(self, tool_call: ToolCall) -> Any:
         logger.debug("Calling tool: %s", tool_call.tool_name)
         start = monotonic()
         tool = self.tool_registry.get(tool_call.tool_name)
         validated_args = tool.input_schema(**tool_call.arguments)
-        result = tool.handler(validated_args)
+
+        # Check if handler is async
+        if inspect.iscoroutinefunction(tool.handler):
+            result = await tool.handler(validated_args)
+        else:
+            result = tool.handler(validated_args)
+
         elapsed_ms = 1000 * (monotonic() - start)
         self.metrics_hook.record_latency(names.TOOL_CALL_DURATION, elapsed_ms)
         self.metrics_hook.increment(

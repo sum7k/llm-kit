@@ -9,14 +9,14 @@ from .types import QueryResult, VectorItem
 class VectorStore(Protocol):
     metrics_hook: MetricsHook
 
-    def upsert(
+    async def upsert(
         self,
         *,
         namespace: str,
         items: Iterable[VectorItem],
     ) -> None: ...
 
-    def query(
+    async def query(
         self,
         *,
         namespace: str,
@@ -25,7 +25,7 @@ class VectorStore(Protocol):
         filters: dict | None = None,
     ) -> list[QueryResult]: ...
 
-    def delete(
+    async def delete(
         self,
         *,
         namespace: str,

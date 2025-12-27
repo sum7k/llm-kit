@@ -77,7 +77,7 @@ class LLMClient(Protocol):
 
     metrics_hook: MetricsHook
 
-    def complete(
+    async def complete(
         self,
         *,
         messages: list[Message],

@@ -3,11 +3,10 @@ from collections.abc import Iterable
 from time import monotonic
 
 import numpy as np
-import psycopg
 from pgvector.psycopg import register_vector
-from psycopg import sql
+from psycopg import AsyncConnection, sql
 from psycopg.types.json import Json
-from psycopg_pool import ConnectionPool
+from psycopg_pool import AsyncConnectionPool
 
 from llm_kit.observability import names
 from llm_kit.observability.base import MetricsHook, NoOpMetricsHook
@@ -18,9 +17,9 @@ from .types import QueryResult, VectorItem
 DEFAULT_NAMESPACE = "__global__"
 
 
-def _configure_connection(conn: psycopg.Connection) -> None:  # type: ignore[type-arg]
+async def _configure_connection(conn: AsyncConnection[tuple]) -> None:
     """Register pgvector types on new connections."""
-    register_vector(conn)
+    await register_vector(conn)
 
 
 class PgVectorStore(VectorStore):
@@ -38,18 +37,18 @@ class PgVectorStore(VectorStore):
         pool_max_size = self._get_param_value(
             pool_max_size, "LLM_KIT_PG_POOL_MAX_SIZE", 10
         )
-        self._pool = ConnectionPool(
+        self._pool = AsyncConnectionPool(
             dsn,
             min_size=pool_min_size,
             max_size=pool_max_size,
             configure=_configure_connection,
         )
 
-    def close(self) -> None:
+    async def close(self) -> None:
         """Close the connection pool."""
-        self._pool.close()
+        await self._pool.close()
 
-    def upsert(
+    async def upsert(
         self, *, namespace: str = DEFAULT_NAMESPACE, items: Iterable[VectorItem]
     ) -> None:
         start = monotonic()
@@ -77,8 +76,8 @@ class PgVectorStore(VectorStore):
         """
         )
 
-        with self._pool.connection() as conn, conn.cursor() as cur:
-            cur.executemany(query, rows)
+        async with self._pool.connection() as conn, conn.cursor() as cur:
+            await cur.executemany(query, rows)
 
         elapsed_ms = 1000 * (monotonic() - start)
         self.metrics_hook.record_latency(names.PGVECTOR_UPSERT_DURATION, elapsed_ms)
@@ -86,7 +85,7 @@ class PgVectorStore(VectorStore):
             names.PGVECTOR_OPERATIONS_TOTAL, labels={"operation": "upsert"}
         )
 
-    def query(
+    async def query(
         self,
         *,
         namespace: str = DEFAULT_NAMESPACE,
@@ -124,9 +123,9 @@ class PgVectorStore(VectorStore):
         vector_arr = np.array(vector)
         params = [vector_arr] + params + [vector_arr, top_k]
 
-        with self._pool.connection() as conn, conn.cursor() as cur:
-            cur.execute(query, params)
-            rows = cur.fetchall()
+        async with self._pool.connection() as conn, conn.cursor() as cur:
+            await cur.execute(query, params)
+            rows = await cur.fetchall()
 
         elapsed_ms = 1000 * (monotonic() - start)
         self.metrics_hook.record_latency(names.PGVECTOR_QUERY_DURATION, elapsed_ms)
@@ -143,7 +142,7 @@ class PgVectorStore(VectorStore):
             for row in rows
         ]
 
-    def delete(
+    async def delete(
         self,
         *,
         namespace: str = DEFAULT_NAMESPACE,
@@ -175,8 +174,8 @@ class PgVectorStore(VectorStore):
         """
         ).format(where_clause=where_sql)
 
-        with self._pool.connection() as conn, conn.cursor() as cur:
-            cur.execute(delete_query, params)
+        async with self._pool.connection() as conn, conn.cursor() as cur:
+            await cur.execute(delete_query, params)
             deleted: int = cur.rowcount
 
         elapsed_ms = 1000 * (monotonic() - start)

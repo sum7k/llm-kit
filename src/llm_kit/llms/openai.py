@@ -5,10 +5,10 @@ import logging
 from time import monotonic
 from typing import Any, Literal
 
-from openai import NOT_GIVEN, OpenAI, OpenAIError
+from openai import NOT_GIVEN, AsyncOpenAI, OpenAIError
 from tenacity import (
+    AsyncRetrying,
     before_sleep_log,
-    retry,
     retry_if_exception_type,
     stop_after_attempt,
     wait_exponential,
@@ -38,7 +38,7 @@ class OpenAILLMClient(LLMClient):
         max_retries: int = 3,
         metrics_hook: MetricsHook = NoOpMetricsHook(),
     ):
-        self._client = OpenAI(api_key=api_key, timeout=timeout)
+        self._client = AsyncOpenAI(api_key=api_key, timeout=timeout)
         self._model = model
         self._max_retries = max_retries
         self.metrics_hook = metrics_hook
@@ -48,7 +48,7 @@ class OpenAILLMClient(LLMClient):
             timeout,
         )
 
-    def complete(
+    async def complete(
         self,
         *,
         messages: list[Message],
@@ -69,7 +69,7 @@ class OpenAILLMClient(LLMClient):
             len(tools) if tools else 0,
         )
 
-        raw = self._call_api(
+        raw = await self._call_api(
             messages=openai_messages,
             tools=openai_tools,
             temperature=temperature,
@@ -104,14 +104,7 @@ class OpenAILLMClient(LLMClient):
 
         return response
 
-    @retry(
-        stop=stop_after_attempt(3),
-        wait=wait_exponential(multiplier=0.5, min=0.5, max=10),
-        retry=retry_if_exception_type(OpenAIError),  # Transport only
-        before_sleep=before_sleep_log(logger, logging.WARNING),
-        reraise=True,
-    )
-    def _call_api(
+    async def _call_api(
         self,
         *,
         messages: list[dict[str, Any]],
@@ -120,13 +113,21 @@ class OpenAILLMClient(LLMClient):
         max_tokens: int | None,
     ) -> Any:
         """Call OpenAI API with transport-only retries."""
-        return self._client.chat.completions.create(
-            model=self._model,
-            messages=messages,  # type: ignore[arg-type]
-            temperature=temperature,
-            tools=tools if tools else NOT_GIVEN,  # type: ignore[arg-type]
-            max_tokens=max_tokens,
-        )
+        async for attempt in AsyncRetrying(
+            stop=stop_after_attempt(3),
+            wait=wait_exponential(multiplier=0.5, min=0.5, max=10),
+            retry=retry_if_exception_type(OpenAIError),
+            before_sleep=before_sleep_log(logger, logging.WARNING),
+            reraise=True,
+        ):
+            with attempt:
+                return await self._client.chat.completions.create(
+                    model=self._model,
+                    messages=messages,  # type: ignore[arg-type]
+                    temperature=temperature,
+                    tools=tools if tools else NOT_GIVEN,  # type: ignore[arg-type]
+                    max_tokens=max_tokens,
+                )
 
     def _convert_messages(self, messages: list[Message]) -> list[dict]:
         """Convert Message objects to OpenAI format.

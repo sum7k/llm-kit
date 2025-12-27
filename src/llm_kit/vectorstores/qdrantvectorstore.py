@@ -2,7 +2,7 @@ from collections.abc import Iterable
 from time import monotonic
 from typing import TypeAlias
 
-from qdrant_client import QdrantClient
+from qdrant_client import AsyncQdrantClient
 from qdrant_client.models import (
     Distance,
     FieldCondition,
@@ -66,33 +66,33 @@ class QdrantVectorStore(VectorStore):
         """
         self.metrics_hook = metrics_hook
         if url:
-            self._client = QdrantClient(url=url, api_key=api_key)
+            self._client = AsyncQdrantClient(url=url, api_key=api_key)
         else:
-            self._client = QdrantClient(":memory:")
+            self._client = AsyncQdrantClient(":memory:")
 
         self._collection_name = collection_name
         self._vector_size = vector_size
         self._distance = distance
+        self._on_disk = on_disk
 
-        self._ensure_collection(on_disk=on_disk)
-
-    def _ensure_collection(self, *, on_disk: bool) -> None:
+    async def _ensure_collection(self) -> None:
         """Create collection if it doesn't exist."""
-        if not self._client.collection_exists(self._collection_name):
-            self._client.create_collection(
+        exists = await self._client.collection_exists(self._collection_name)
+        if not exists:
+            await self._client.create_collection(
                 collection_name=self._collection_name,
                 vectors_config=VectorParams(
                     size=self._vector_size,
                     distance=self._distance,
-                    on_disk=on_disk,
+                    on_disk=self._on_disk,
                 ),
             )
 
-    def close(self) -> None:
+    async def close(self) -> None:
         """Close the Qdrant client."""
-        self._client.close()
+        await self._client.close()
 
-    def upsert(
+    async def upsert(
         self, *, namespace: str = DEFAULT_NAMESPACE, items: Iterable[VectorItem]
     ) -> None:
         """
@@ -102,6 +102,8 @@ class QdrantVectorStore(VectorStore):
             namespace: Logical namespace for multi-tenancy.
             items: Iterable of VectorItem to upsert.
         """
+        await self._ensure_collection()
+
         start = monotonic()
         points = [
             PointStruct(
@@ -115,7 +117,7 @@ class QdrantVectorStore(VectorStore):
         if not points:
             return
 
-        self._client.upsert(
+        await self._client.upsert(
             collection_name=self._collection_name,
             wait=True,
             points=points,
@@ -127,7 +129,7 @@ class QdrantVectorStore(VectorStore):
             names.QDRANT_OPERATIONS_TOTAL, labels={"operation": "upsert"}
         )
 
-    def query(
+    async def query(
         self,
         *,
         namespace: str = DEFAULT_NAMESPACE,
@@ -147,6 +149,8 @@ class QdrantVectorStore(VectorStore):
         Returns:
             List of QueryResult sorted by similarity (highest first).
         """
+        await self._ensure_collection()
+
         start = monotonic()
         if top_k < 1:
             raise ValueError("top_k must be at least 1")
@@ -163,7 +167,7 @@ class QdrantVectorStore(VectorStore):
 
         query_filter = Filter(must=must_conditions)
 
-        results = self._client.query_points(
+        results = await self._client.query_points(
             collection_name=self._collection_name,
             query=vector,
             query_filter=query_filter,
@@ -188,7 +192,7 @@ class QdrantVectorStore(VectorStore):
             for hit in results.points
         ]
 
-    def delete(
+    async def delete(
         self,
         *,
         namespace: str = DEFAULT_NAMESPACE,
@@ -206,12 +210,14 @@ class QdrantVectorStore(VectorStore):
         Returns:
             Number of points deleted.
         """
+        await self._ensure_collection()
+
         start = monotonic()
         if not ids and not filters:
             raise ValueError("delete requires ids or filters")
 
         # Count before deletion to return deleted count
-        count_before = self._count_matching(
+        count_before = await self._count_matching(
             namespace=namespace, ids=ids, filters=filters
         )
 
@@ -230,7 +236,7 @@ class QdrantVectorStore(VectorStore):
                     FieldCondition(key=key, match=MatchValue(value=value))
                 )
 
-        self._client.delete(
+        await self._client.delete(
             collection_name=self._collection_name,
             points_selector=FilterSelector(filter=Filter(must=must_conditions)),
             wait=True,
@@ -244,7 +250,7 @@ class QdrantVectorStore(VectorStore):
 
         return count_before
 
-    def _count_matching(
+    async def _count_matching(
         self,
         *,
         namespace: str,
@@ -267,7 +273,7 @@ class QdrantVectorStore(VectorStore):
         if ids:
             # For ID-based deletion, we need to check which IDs exist
             id_list = list(ids)
-            points = self._client.retrieve(
+            points = await self._client.retrieve(
                 collection_name=self._collection_name,
                 ids=id_list,
                 with_payload=True,
@@ -279,7 +285,7 @@ class QdrantVectorStore(VectorStore):
                 if p.payload and p.payload.get("_namespace") == namespace
             )
         else:
-            result = self._client.count(
+            result = await self._client.count(
                 collection_name=self._collection_name,
                 count_filter=query_filter,
                 exact=True,

@@ -1,11 +1,12 @@
+import asyncio
 import logging
 from time import monotonic
 from typing import Any
 
-from openai import OpenAI, OpenAIError
+from openai import AsyncOpenAI, OpenAIError
 from tenacity import (
+    AsyncRetrying,
     before_sleep_log,
-    retry,
     retry_if_exception_type,
     stop_after_attempt,
     wait_exponential,
@@ -28,7 +29,7 @@ class OpenAIEmbeddingsClient(EmbeddingsClient):
         batch_size: int = 100,
         metrics_hook: MetricsHook = NoOpMetricsHook(),
     ):
-        self._client = OpenAI(api_key=api_key, timeout=timeout)
+        self._client = AsyncOpenAI(api_key=api_key, timeout=timeout)
         self._model = model
         self._batch_size = batch_size
         self.metrics_hook = metrics_hook
@@ -39,25 +40,28 @@ class OpenAIEmbeddingsClient(EmbeddingsClient):
             batch_size,
         )
 
-    def embed(self, texts: list[str]) -> list[Embedding]:
+    async def embed(self, texts: list[str]) -> list[Embedding]:
         if not texts:
             logger.debug("Empty input, returning empty list")
             return []
 
         start = monotonic()
         logger.info("Embedding %d texts in batches of %d", len(texts), self._batch_size)
-        embeddings: list[Embedding] = []
 
-        for batch_num, batch_start in enumerate(
-            range(0, len(texts), self._batch_size), 1
-        ):
+        # Process all batches concurrently
+        batches = []
+        for batch_start in range(0, len(texts), self._batch_size):
             end = batch_start + self._batch_size
-            batch_texts = texts[batch_start:end]
-            logger.debug(
-                "Processing batch %d with %d texts", batch_num, len(batch_texts)
-            )
+            batches.append(texts[batch_start:end])
 
-            response = self._embed_batch(batch_texts)
+        logger.debug("Processing %d batches concurrently", len(batches))
+        responses = await asyncio.gather(
+            *[self._embed_batch(batch) for batch in batches]
+        )
+
+        # Flatten results
+        embeddings: list[Embedding] = []
+        for response in responses:
             for data in response.data:
                 embeddings.append(Embedding(vector=data.embedding))
 
@@ -69,15 +73,16 @@ class OpenAIEmbeddingsClient(EmbeddingsClient):
         logger.info("Successfully embedded %d texts", len(embeddings))
         return embeddings
 
-    @retry(
-        stop=stop_after_attempt(3),
-        wait=wait_exponential(multiplier=0.5, min=0.5, max=5),
-        retry=retry_if_exception_type(OpenAIError),
-        before_sleep=before_sleep_log(logger, logging.WARNING),
-        reraise=True,
-    )
-    def _embed_batch(self, batch: list[str]) -> Any:
-        return self._client.embeddings.create(
-            model=self._model,
-            input=batch,
-        )
+    async def _embed_batch(self, batch: list[str]) -> Any:
+        async for attempt in AsyncRetrying(
+            stop=stop_after_attempt(3),
+            wait=wait_exponential(multiplier=0.5, min=0.5, max=5),
+            retry=retry_if_exception_type(OpenAIError),
+            before_sleep=before_sleep_log(logger, logging.WARNING),
+            reraise=True,
+        ):
+            with attempt:
+                return await self._client.embeddings.create(
+                    model=self._model,
+                    input=batch,
+                )
