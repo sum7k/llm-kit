@@ -23,21 +23,36 @@ logger = logging.getLogger(__name__)
 class OpenAIEmbeddingsClient(EmbeddingsClient):
     def __init__(
         self,
-        api_key: str,
+        api_key: str | None = None,
         model: str = "text-embedding-ada-002",
         timeout: float = 10,
         batch_size: int = 100,
+        max_concurrent: int = 3,
         metrics_hook: MetricsHook = NoOpMetricsHook(),
     ):
+        """
+        Initialize OpenAI embeddings client.
+
+        Args:
+            api_key: OpenAI API key. If None, falls back to OPENAI_API_KEY env var.
+            model: Embedding model to use.
+            timeout: Request timeout in seconds.
+            batch_size: Number of texts to embed per batch.
+            max_concurrent: Maximum concurrent API requests. Limits parallelism to avoid
+                rate limiting. Set to 1 for sequential processing.
+            metrics_hook: Hook for recording metrics.
+        """
         self._client = AsyncOpenAI(api_key=api_key, timeout=timeout)
         self._model = model
         self._batch_size = batch_size
+        self._semaphore = asyncio.Semaphore(max_concurrent)
         self.metrics_hook = metrics_hook
         logger.info(
-            "Initialized OpenAIEmbeddingsClient with model=%s, timeout=%s, batch_size=%s",
+            "Initialized OpenAIEmbeddingsClient with model=%s, timeout=%s, batch_size=%s, max_concurrent=%s",
             model,
             timeout,
             batch_size,
+            max_concurrent,
         )
 
     async def embed(self, texts: list[str]) -> list[Embedding]:
@@ -54,9 +69,13 @@ class OpenAIEmbeddingsClient(EmbeddingsClient):
             end = batch_start + self._batch_size
             batches.append(texts[batch_start:end])
 
-        logger.debug("Processing %d batches concurrently", len(batches))
+        logger.debug(
+            "Processing %d batches with max %d concurrent",
+            len(batches),
+            self._semaphore._value,
+        )
         responses = await asyncio.gather(
-            *[self._embed_batch(batch) for batch in batches]
+            *[self._embed_batch_with_semaphore(batch) for batch in batches]
         )
 
         # Flatten results
@@ -72,6 +91,11 @@ class OpenAIEmbeddingsClient(EmbeddingsClient):
         )
         logger.info("Successfully embedded %d texts", len(embeddings))
         return embeddings
+
+    async def _embed_batch_with_semaphore(self, batch: list[str]) -> Any:
+        """Embed a batch with semaphore to limit concurrent requests."""
+        async with self._semaphore:
+            return await self._embed_batch(batch)
 
     async def _embed_batch(self, batch: list[str]) -> Any:
         async for attempt in AsyncRetrying(
