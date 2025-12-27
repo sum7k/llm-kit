@@ -139,6 +139,7 @@ Narrow interface for vector databases:
 
 - `PgVectorStore` — PostgreSQL with pgvector
 - `QdrantVectorStore` — Qdrant
+- `SQLiteVectorStore` — SQLite (zero-setup, perfect for dev/small datasets)
 
 Exposes only: `upsert`, `query`, `delete`.
 

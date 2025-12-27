@@ -45,6 +45,7 @@ class QdrantVectorStore(VectorStore):
         self,
         *,
         url: str | None = None,
+        path: str | None = None,
         api_key: str | None = None,
         collection_name: str,
         vector_size: int,
@@ -56,18 +57,41 @@ class QdrantVectorStore(VectorStore):
         Initialize Qdrant vector store.
 
         Args:
-            url: Qdrant server URL. If None, uses in-memory mode.
-            api_key: API key for Qdrant Cloud.
+            url: Qdrant server URL. If provided, connects to remote server.
+            path: Path to local Qdrant storage directory. If provided, uses local persistence.
+            api_key: API key for Qdrant Cloud (only used with url).
             collection_name: Name of the collection.
             vector_size: Dimensionality of vectors.
             distance: Distance metric (COSINE, EUCLID, DOT).
             on_disk: Whether to store vectors on disk (for large datasets).
             metrics_hook: Hook for recording metrics.
+
+        Note:
+            - If both url and path are None, uses in-memory mode.
+            - If url is provided, connects to remote Qdrant server.
+            - If path is provided (and url is None), uses local file persistence.
+            - Local storage (path) requires point IDs to be valid UUIDs.
+
+        Examples:
+            # In-memory (for testing)
+            store = QdrantVectorStore(collection_name="test", vector_size=384)
+
+            # Local file persistence (requires UUID IDs)
+            store = QdrantVectorStore(path="./qdrant_data", collection_name="docs", vector_size=384)
+
+            # Remote server
+            store = QdrantVectorStore(url="http://localhost:6333", collection_name="docs", vector_size=384)
         """
         self.metrics_hook = metrics_hook
+
         if url:
+            # Remote Qdrant server
             self._client = AsyncQdrantClient(url=url, api_key=api_key)
+        elif path:
+            # Local file persistence
+            self._client = AsyncQdrantClient(path=path)
         else:
+            # In-memory mode
             self._client = AsyncQdrantClient(":memory:")
 
         self._collection_name = collection_name

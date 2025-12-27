@@ -73,6 +73,20 @@ QDRANT_ERRORS_TOTAL = "qdrant_errors_total"
 
 
 # ============================================================================
+# Vector Store Metrics (SQLite)
+# ============================================================================
+
+# Duration
+SQLITE_UPSERT_DURATION = "sqlite_upsert_duration"
+SQLITE_QUERY_DURATION = "sqlite_query_duration"
+SQLITE_DELETE_DURATION = "sqlite_delete_duration"
+
+# Counters
+SQLITE_OPERATIONS_TOTAL = "sqlite_operations_total"
+SQLITE_ERRORS_TOTAL = "sqlite_errors_total"
+
+
+# ============================================================================
 # Tool Metrics
 # ============================================================================
 
