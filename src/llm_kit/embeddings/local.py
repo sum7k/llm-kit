@@ -8,6 +8,7 @@ from time import monotonic
 
 from sentence_transformers import SentenceTransformer
 
+from llm_kit.observability import names
 from llm_kit.observability.base import MetricsHook, NoOpMetricsHook
 
 from .base import Embedding, EmbeddingsClient
@@ -65,8 +66,9 @@ class LocalEmbeddingsClient(EmbeddingsClient):
             embeddings.extend(Embedding(vector=v.tolist()) for v in vectors)
 
         elapsed_ms = 1000 * (monotonic() - start)
-        self.metrics_hook.record_latency(
-            name="local_embeddings_duration", value_ms=elapsed_ms
+        self.metrics_hook.record_latency(names.EMBEDDINGS_LOCAL_DURATION, elapsed_ms)
+        self.metrics_hook.increment(
+            names.EMBEDDINGS_REQUESTS_TOTAL, labels={"backend": "local"}
         )
         logger.info("Successfully embedded %d texts", len(embeddings))
         return embeddings

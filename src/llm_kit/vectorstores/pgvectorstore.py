@@ -9,6 +9,7 @@ from psycopg import sql
 from psycopg.types.json import Json
 from psycopg_pool import ConnectionPool
 
+from llm_kit.observability import names
 from llm_kit.observability.base import MetricsHook, NoOpMetricsHook
 
 from .base import VectorStore
@@ -80,8 +81,9 @@ class PgVectorStore(VectorStore):
             cur.executemany(query, rows)
 
         elapsed_ms = 1000 * (monotonic() - start)
-        self.metrics_hook.record_latency(
-            name="pgvector_upsert_duration", value_ms=elapsed_ms
+        self.metrics_hook.record_latency(names.PGVECTOR_UPSERT_DURATION, elapsed_ms)
+        self.metrics_hook.increment(
+            names.PGVECTOR_OPERATIONS_TOTAL, labels={"operation": "upsert"}
         )
 
     def query(
@@ -127,8 +129,9 @@ class PgVectorStore(VectorStore):
             rows = cur.fetchall()
 
         elapsed_ms = 1000 * (monotonic() - start)
-        self.metrics_hook.record_latency(
-            name="pgvector_query_duration", value_ms=elapsed_ms
+        self.metrics_hook.record_latency(names.PGVECTOR_QUERY_DURATION, elapsed_ms)
+        self.metrics_hook.increment(
+            names.PGVECTOR_OPERATIONS_TOTAL, labels={"operation": "query"}
         )
 
         return [
@@ -177,8 +180,9 @@ class PgVectorStore(VectorStore):
             deleted: int = cur.rowcount
 
         elapsed_ms = 1000 * (monotonic() - start)
-        self.metrics_hook.record_latency(
-            name="pgvector_delete_duration", value_ms=elapsed_ms
+        self.metrics_hook.record_latency(names.PGVECTOR_DELETE_DURATION, elapsed_ms)
+        self.metrics_hook.increment(
+            names.PGVECTOR_OPERATIONS_TOTAL, labels={"operation": "delete"}
         )
 
         return deleted

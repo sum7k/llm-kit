@@ -2,6 +2,7 @@ import logging
 from time import monotonic
 from typing import Any
 
+from llm_kit.observability import names
 from llm_kit.observability.base import MetricsHook, NoOpMetricsHook
 
 from .tool import ToolCall
@@ -26,5 +27,8 @@ class ToolEngine:
         validated_args = tool.input_schema(**tool_call.arguments)
         result = tool.handler(validated_args)
         elapsed_ms = 1000 * (monotonic() - start)
-        self.metrics_hook.record_latency(name="tool_call_duration", value_ms=elapsed_ms)
+        self.metrics_hook.record_latency(names.TOOL_CALL_DURATION, elapsed_ms)
+        self.metrics_hook.increment(
+            names.TOOL_CALLS_TOTAL, labels={"tool": tool_call.tool_name}
+        )
         return result

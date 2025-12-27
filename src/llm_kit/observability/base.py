@@ -2,16 +2,40 @@ from typing import Protocol
 
 
 class MetricsHook(Protocol):
-    def record_latency(self, name: str, value_ms: float) -> None:
-        """Record a latency metric.
+    def record_latency(
+        self,
+        name: str,
+        value_ms: float,
+        labels: dict[str, str] | None = None,
+    ) -> None: ...
 
-        Args:
-            name: Name of the metric.
-            value_ms: Latency in milliseconds.
-        """
-        ...
+    def increment(
+        self,
+        name: str,
+        value: int = 1,
+        labels: dict[str, str] | None = None,
+    ) -> None: ...
+
+    def record_gauge(
+        self,
+        name: str,
+        value: float,
+        labels: dict[str, str] | None = None,
+    ) -> None: ...
 
 
 class NoOpMetricsHook:
-    def record_latency(self, name: str, value_ms: float) -> None:
+    def record_latency(
+        self, name: str, value_ms: float, labels: dict[str, str] | None = None
+    ) -> None:
+        pass
+
+    def increment(
+        self, name: str, value: int = 1, labels: dict[str, str] | None = None
+    ) -> None:
+        pass
+
+    def record_gauge(
+        self, name: str, value: float, labels: dict[str, str] | None = None
+    ) -> None:
         pass

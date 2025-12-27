@@ -1,6 +1,7 @@
 from dataclasses import dataclass
 from time import monotonic
 
+from llm_kit.observability import names
 from llm_kit.observability.base import MetricsHook, NoOpMetricsHook
 
 
@@ -53,5 +54,6 @@ def chunk_text(
             break
 
     elapsed_ms = 1000 * (monotonic() - start)
-    metrics_hook.record_latency(name="chunking_duration", value_ms=elapsed_ms)
+    metrics_hook.record_latency(names.CHUNKING_DURATION, elapsed_ms)
+    metrics_hook.increment(names.CHUNKING_CHUNKS_CREATED, len(chunks))
     return chunks

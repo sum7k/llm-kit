@@ -18,6 +18,7 @@ from qdrant_client.models import (
     VectorParams,
 )
 
+from llm_kit.observability import names
 from llm_kit.observability.base import MetricsHook, NoOpMetricsHook
 
 from .base import VectorStore
@@ -121,8 +122,9 @@ class QdrantVectorStore(VectorStore):
         )
 
         elapsed_ms = 1000 * (monotonic() - start)
-        self.metrics_hook.record_latency(
-            name="qdrant_upsert_duration", value_ms=elapsed_ms
+        self.metrics_hook.record_latency(names.QDRANT_UPSERT_DURATION, elapsed_ms)
+        self.metrics_hook.increment(
+            names.QDRANT_OPERATIONS_TOTAL, labels={"operation": "upsert"}
         )
 
     def query(
@@ -170,8 +172,9 @@ class QdrantVectorStore(VectorStore):
         )
 
         elapsed_ms = 1000 * (monotonic() - start)
-        self.metrics_hook.record_latency(
-            name="qdrant_query_duration", value_ms=elapsed_ms
+        self.metrics_hook.record_latency(names.QDRANT_QUERY_DURATION, elapsed_ms)
+        self.metrics_hook.increment(
+            names.QDRANT_OPERATIONS_TOTAL, labels={"operation": "query"}
         )
 
         return [
@@ -234,8 +237,9 @@ class QdrantVectorStore(VectorStore):
         )
 
         elapsed_ms = 1000 * (monotonic() - start)
-        self.metrics_hook.record_latency(
-            name="qdrant_delete_duration", value_ms=elapsed_ms
+        self.metrics_hook.record_latency(names.QDRANT_DELETE_DURATION, elapsed_ms)
+        self.metrics_hook.increment(
+            names.QDRANT_OPERATIONS_TOTAL, labels={"operation": "delete"}
         )
 
         return count_before

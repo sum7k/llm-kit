@@ -13,6 +13,7 @@ from tenacity import (
     wait_exponential,
 )
 
+from llm_kit.observability import names
 from llm_kit.observability.base import MetricsHook, NoOpMetricsHook
 from llm_kit.tools.tool import Tool
 
@@ -84,7 +85,18 @@ class AnthropicLLMClient(LLMClient):
         response = self._normalize_response(raw, elapsed_ms)
 
         # Metrics
-        self.metrics_hook.record_latency("llm_completion_duration", elapsed_ms)
+        self.metrics_hook.record_latency(names.LLM_COMPLETION_DURATION, elapsed_ms)
+        self.metrics_hook.increment(
+            names.LLM_REQUESTS_TOTAL,
+            labels={"provider": "anthropic", "model": self._model},
+        )
+        self.metrics_hook.increment(
+            names.LLM_TOKENS_PROMPT, response.usage.prompt_tokens
+        )
+        self.metrics_hook.increment(
+            names.LLM_TOKENS_COMPLETION, response.usage.completion_tokens
+        )
+        self.metrics_hook.increment(names.LLM_TOKENS_TOTAL, response.usage.total_tokens)
 
         logger.info(
             "Anthropic completion: finish=%s, tokens=%d, latency=%.0fms",
