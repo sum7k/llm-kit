@@ -24,7 +24,7 @@ class OpenAIEmbeddingsClient(EmbeddingsClient):
     def __init__(
         self,
         api_key: str | None = None,
-        model: str = "text-embedding-ada-002",
+        model: str = "text-embedding-3-small",
         timeout: float = 10,
         batch_size: int = 100,
         max_concurrent: int = 3,
