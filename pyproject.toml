@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "llm-kit"
-version = "0.4.1"
+version = "0.4.2"
 description = "Reusable LLM / RAG utilities for production systems"
 authors = ["Sumeet Kumar"]
 readme = "README.md"
