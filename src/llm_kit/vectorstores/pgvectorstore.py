@@ -3,7 +3,7 @@ from collections.abc import Iterable
 from time import monotonic
 
 import numpy as np
-from pgvector.psycopg import register_vector
+from pgvector.psycopg import register_vector_async
 from psycopg import AsyncConnection, sql
 from psycopg.types.json import Json
 from psycopg_pool import AsyncConnectionPool
@@ -19,7 +19,7 @@ DEFAULT_NAMESPACE = "__global__"
 
 async def _configure_connection(conn: AsyncConnection[tuple]) -> None:
     """Register pgvector types on new connections."""
-    await register_vector(conn)
+    await register_vector_async(conn)
 
 
 class PgVectorStore(VectorStore):

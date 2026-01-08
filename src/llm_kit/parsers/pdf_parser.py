@@ -6,7 +6,7 @@ from typing import Any, BinaryIO, cast
 import pdfplumber
 
 from .base import DocumentParser
-from .models import ParsedChunk, ParsedDocument, ParsedSection
+from .models import ParsedDocument, ParsedSection, TextBlock
 
 
 class PdfParser(DocumentParser):
@@ -23,7 +23,7 @@ class PdfParser(DocumentParser):
 
         current_heading = "Document"
         current_path = [current_heading]
-        current_chunks: list[ParsedChunk] = []
+        current_blocks: list[TextBlock] = []
 
         # pdfplumber.open accepts path-like or buffer objects; cast to Any
         with pdfplumber.open(cast(Any, source)) as pdf:
@@ -41,15 +41,15 @@ class PdfParser(DocumentParser):
 
                     # Heading heuristic
                     if self._is_heading(clean):
-                        if current_chunks:
+                        if current_blocks:
                             sections.append(
                                 ParsedSection(
                                     heading=current_heading,
                                     section_path=current_path,
-                                    chunks=current_chunks,
+                                    blocks=current_blocks,
                                 )
                             )
-                            current_chunks = []
+                            current_blocks = []
 
                         current_heading = clean
                         current_path = [current_heading]
@@ -59,8 +59,8 @@ class PdfParser(DocumentParser):
                     start = global_offset
                     end = start + len(clean)
 
-                    current_chunks.append(
-                        ParsedChunk(
+                    current_blocks.append(
+                        TextBlock(
                             text=clean,
                             offset_start=start,
                             offset_end=end,
@@ -70,12 +70,12 @@ class PdfParser(DocumentParser):
 
                     global_offset = end + 1
 
-        if current_chunks:
+        if current_blocks:
             sections.append(
                 ParsedSection(
                     heading=current_heading,
                     section_path=current_path,
-                    chunks=current_chunks,
+                    blocks=current_blocks,
                 )
             )
 

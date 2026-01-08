@@ -12,14 +12,14 @@ from llm_kit.llms.openai import OpenAILLMClient
 class TestFactory:
     def test_create_openai_client(self) -> None:
         """Test creating OpenAI client."""
-        with patch("llm_kit.llms.openai.OpenAI"):
+        with patch("llm_kit.llms.openai.AsyncOpenAI"):
             config = LLMConfig(provider="openai", model="gpt-4o", api_key="test")
             client = create_llm_client(config)
             assert isinstance(client, OpenAILLMClient)
 
     def test_create_anthropic_client(self) -> None:
         """Test creating Anthropic client."""
-        with patch("llm_kit.llms.anthropic.Anthropic"):
+        with patch("llm_kit.llms.anthropic.AsyncAnthropic"):
             config = LLMConfig(
                 provider="anthropic", model="claude-sonnet-4-20250514", api_key="test"
             )
@@ -34,7 +34,7 @@ class TestFactory:
 
     def test_config_values_passed_through(self) -> None:
         """Test that config values are passed to client."""
-        with patch("llm_kit.llms.openai.OpenAI") as mock_openai:
+        with patch("llm_kit.llms.openai.AsyncOpenAI") as mock_openai:
             config = LLMConfig(
                 provider="openai",
                 model="gpt-4-turbo",

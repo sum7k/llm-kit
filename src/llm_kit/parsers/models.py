@@ -4,7 +4,7 @@ from dataclasses import dataclass, field
 
 
 @dataclass(frozen=True)
-class ParsedChunk:
+class TextBlock:
     text: str
     offset_start: int
     offset_end: int
@@ -15,7 +15,7 @@ class ParsedChunk:
 class ParsedSection:
     heading: str
     section_path: list[str]
-    chunks: list[ParsedChunk]
+    blocks: list[TextBlock]
 
 
 @dataclass(frozen=True)

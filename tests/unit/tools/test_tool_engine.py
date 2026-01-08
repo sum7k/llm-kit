@@ -29,16 +29,23 @@ def engine() -> ToolEngine:
     return ToolEngine(registry)
 
 
-def test_call_tool_returns_result(engine: ToolEngine) -> None:
-    result = engine.call_tool(ToolCall(tool_name="add", arguments={"a": 2, "b": 3}))
+@pytest.mark.asyncio
+async def test_call_tool_returns_result(engine: ToolEngine) -> None:
+    result = await engine.call_tool(
+        ToolCall(tool_name="add", arguments={"a": 2, "b": 3})
+    )
     assert result == 5
 
 
-def test_call_tool_validates_input(engine: ToolEngine) -> None:
+@pytest.mark.asyncio
+async def test_call_tool_validates_input(engine: ToolEngine) -> None:
     with pytest.raises(ValidationError):  # Pydantic ValidationError
-        engine.call_tool(ToolCall(tool_name="add", arguments={"a": "not_int", "b": 3}))
+        await engine.call_tool(
+            ToolCall(tool_name="add", arguments={"a": "not_int", "b": 3})
+        )
 
 
-def test_call_unknown_tool_raises(engine: ToolEngine) -> None:
+@pytest.mark.asyncio
+async def test_call_unknown_tool_raises(engine: ToolEngine) -> None:
     with pytest.raises(KeyError, match="not found"):
-        engine.call_tool(ToolCall(tool_name="unknown", arguments={}))
+        await engine.call_tool(ToolCall(tool_name="unknown", arguments={}))

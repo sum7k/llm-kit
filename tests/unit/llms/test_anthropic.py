@@ -1,6 +1,6 @@
 # tests/unit/llms/test_anthropic.py
 
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from pydantic import BaseModel
@@ -49,15 +49,16 @@ def mock_anthropic_tool_response() -> MagicMock:
 
 
 class TestAnthropicLLMClient:
-    def test_complete_basic(self, mock_anthropic_response: MagicMock) -> None:
+    @pytest.mark.asyncio
+    async def test_complete_basic(self, mock_anthropic_response: MagicMock) -> None:
         """Test basic completion without tools."""
-        with patch("llm_kit.llms.anthropic.Anthropic") as mock_anthropic:
-            mock_client = MagicMock()
+        with patch("llm_kit.llms.anthropic.AsyncAnthropic") as mock_anthropic:
+            mock_client = AsyncMock()
             mock_client.messages.create.return_value = mock_anthropic_response
             mock_anthropic.return_value = mock_client
 
             client = AnthropicLLMClient(api_key="test-key")
-            response = client.complete(
+            response = await client.complete(
                 messages=[Message(role=Role.USER, content="Hello!")]
             )
 
@@ -67,10 +68,13 @@ class TestAnthropicLLMClient:
             assert response.usage.total_tokens == 18
             assert response.latency_ms > 0
 
-    def test_complete_with_tools(self, mock_anthropic_tool_response: MagicMock) -> None:
+    @pytest.mark.asyncio
+    async def test_complete_with_tools(
+        self, mock_anthropic_tool_response: MagicMock
+    ) -> None:
         """Test completion with tool calls."""
-        with patch("llm_kit.llms.anthropic.Anthropic") as mock_anthropic:
-            mock_client = MagicMock()
+        with patch("llm_kit.llms.anthropic.AsyncAnthropic") as mock_anthropic:
+            mock_client = AsyncMock()
             mock_client.messages.create.return_value = mock_anthropic_tool_response
             mock_anthropic.return_value = mock_client
 
@@ -83,7 +87,7 @@ class TestAnthropicLLMClient:
                 handler=lambda x: f"Weather in {x.city}",
             )
 
-            response = client.complete(
+            response = await client.complete(
                 messages=[Message(role=Role.USER, content="What's the weather?")],
                 tools=[tool],
             )
@@ -97,7 +101,7 @@ class TestAnthropicLLMClient:
 
     def test_system_message_extraction(self) -> None:
         """Test that system messages are extracted correctly."""
-        with patch("llm_kit.llms.anthropic.Anthropic"):
+        with patch("llm_kit.llms.anthropic.AsyncAnthropic"):
             client = AnthropicLLMClient(api_key="test-key")
 
             messages = [
@@ -113,7 +117,7 @@ class TestAnthropicLLMClient:
 
     def test_tool_result_conversion(self) -> None:
         """Test that tool results are converted to Anthropic format."""
-        with patch("llm_kit.llms.anthropic.Anthropic"):
+        with patch("llm_kit.llms.anthropic.AsyncAnthropic"):
             client = AnthropicLLMClient(api_key="test-key")
 
             messages = [
@@ -127,25 +131,29 @@ class TestAnthropicLLMClient:
             assert converted[0]["content"][0]["tool_use_id"] == "toolu_123"
             assert converted[0]["content"][0]["content"] == "22°C sunny"
 
-    def test_metrics_hook_called(self, mock_anthropic_response: MagicMock) -> None:
+    @pytest.mark.asyncio
+    async def test_metrics_hook_called(
+        self, mock_anthropic_response: MagicMock
+    ) -> None:
         """Test that metrics hook is called."""
-        with patch("llm_kit.llms.anthropic.Anthropic") as mock_anthropic:
-            mock_client = MagicMock()
+        with patch("llm_kit.llms.anthropic.AsyncAnthropic") as mock_anthropic:
+            mock_client = AsyncMock()
             mock_client.messages.create.return_value = mock_anthropic_response
             mock_anthropic.return_value = mock_client
 
             metrics_hook = MagicMock()
             client = AnthropicLLMClient(api_key="test-key", metrics_hook=metrics_hook)
 
-            client.complete(messages=[Message(role=Role.USER, content="Hi")])
+            await client.complete(messages=[Message(role=Role.USER, content="Hi")])
 
             metrics_hook.record_latency.assert_called_once()
             call_args = metrics_hook.record_latency.call_args
             assert call_args[0][0] == "llm_completion_duration"
 
-    def test_max_tokens_finish_reason(self) -> None:
+    @pytest.mark.asyncio
+    async def test_max_tokens_finish_reason(self) -> None:
         """Test that max_tokens stop reason is mapped correctly."""
-        with patch("llm_kit.llms.anthropic.Anthropic") as mock_anthropic:
+        with patch("llm_kit.llms.anthropic.AsyncAnthropic") as mock_anthropic:
             response = MagicMock()
             text_block = MagicMock()
             text_block.type = "text"
@@ -155,11 +163,13 @@ class TestAnthropicLLMClient:
             response.usage.input_tokens = 10
             response.usage.output_tokens = 100
 
-            mock_client = MagicMock()
+            mock_client = AsyncMock()
             mock_client.messages.create.return_value = response
             mock_anthropic.return_value = mock_client
 
             client = AnthropicLLMClient(api_key="test-key")
-            result = client.complete(messages=[Message(role=Role.USER, content="test")])
+            result = await client.complete(
+                messages=[Message(role=Role.USER, content="test")]
+            )
 
             assert result.finish_reason == "length"
