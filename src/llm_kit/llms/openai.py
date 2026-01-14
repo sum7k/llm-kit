@@ -126,7 +126,7 @@ class OpenAILLMClient(LLMClient):
                     messages=messages,  # type: ignore[arg-type]
                     temperature=temperature,
                     tools=tools if tools else NOT_GIVEN,  # type: ignore[arg-type]
-                    max_tokens=max_tokens,
+                    max_tokens=max_tokens if max_tokens else NOT_GIVEN,  # type: ignore[arg-type]
                 )
 
     def _convert_messages(self, messages: list[Message]) -> list[dict]:
